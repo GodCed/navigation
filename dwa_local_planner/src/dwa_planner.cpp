@@ -84,6 +84,7 @@ namespace dwa_local_planner {
     obstacle_costs_.setParams(config.max_vel_trans, config.max_scaling_factor, config.scaling_speed);
 
     twirling_costs_.setScale(config.twirling_scale);
+    yaw_costs_.setScale(config.yaw_scale);
 
     int vx_samp, vy_samp, vth_samp;
     vx_samp = config.vx_samples;
@@ -171,6 +172,7 @@ namespace dwa_local_planner {
     critics.push_back(&path_costs_); // prefers trajectories on global path
     critics.push_back(&goal_costs_); // prefers trajectories that go towards (local) goal, based on wave propagation
     critics.push_back(&twirling_costs_); // optionally prefer trajectories that don't spin
+    critics.push_back(&yaw_costs_); // optionally prefer trajectories that match smart yaw
 
     // trajectory generators
     std::vector<base_local_planner::TrajectorySampleGenerator*> generator_list;
@@ -256,10 +258,22 @@ namespace dwa_local_planner {
     // alignment costs
     geometry_msgs::PoseStamped goal_pose = global_plan_.back();
 
+    // compute goal pos
+    Eigen::Vector3f goal_pos(
+      goal_pose.pose.position.x,
+      goal_pose.pose.position.y,
+      tf2::getYaw(global_pose.pose.orientation)
+    );
+
+    yaw_costs_.setGoalPose(goal_pos);
+
+    // Compute robot pos
     Eigen::Vector3f pos(global_pose.pose.position.x, global_pose.pose.position.y, tf2::getYaw(global_pose.pose.orientation));
     double sq_dist =
         (pos[0] - goal_pose.pose.position.x) * (pos[0] - goal_pose.pose.position.x) +
         (pos[1] - goal_pose.pose.position.y) * (pos[1] - goal_pose.pose.position.y);
+    
+    yaw_costs_.setCurrentPose(pos);
 
     // we want the robot nose to be drawn to its final position
     // (before robot turns towards goal orientation), not the end of the
