@@ -174,6 +174,8 @@ namespace dwa_local_planner {
     critics.push_back(&twirling_costs_); // optionally prefer trajectories that don't spin
     critics.push_back(&yaw_costs_); // optionally prefer trajectories that match smart yaw
 
+    ROS_INFO("yaw_cost critic added!");
+
     // trajectory generators
     std::vector<base_local_planner::TrajectorySampleGenerator*> generator_list;
     generator_list.push_back(&generator_);
@@ -242,6 +244,7 @@ namespace dwa_local_planner {
       const geometry_msgs::PoseStamped& global_pose,
       const std::vector<geometry_msgs::PoseStamped>& new_plan,
       const std::vector<geometry_msgs::Point>& footprint_spec) {
+
     global_plan_.resize(new_plan.size());
     for (unsigned int i = 0; i < new_plan.size(); ++i) {
       global_plan_[i] = new_plan[i];
@@ -262,7 +265,7 @@ namespace dwa_local_planner {
     Eigen::Vector3f goal_pos(
       goal_pose.pose.position.x,
       goal_pose.pose.position.y,
-      tf2::getYaw(global_pose.pose.orientation)
+      tf2::getYaw(goal_pose.pose.orientation)
     );
 
     yaw_costs_.setGoalPose(goal_pos);
@@ -398,6 +401,8 @@ namespace dwa_local_planner {
       q.setRPY(0, 0, result_traj_.thetav_);
       tf2::convert(q, drive_velocities.pose.orientation);
     }
+
+    yaw_costs_.scoreTrajectoryWithLogging(result_traj_, true);
 
     return result_traj_;
   }

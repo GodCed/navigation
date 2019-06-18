@@ -40,6 +40,8 @@
 
 #include <base_local_planner/trajectory_cost_function.h>
 #include <Eigen/Core>
+#include <ros/ros.h>
+#include <std_msgs/Float64.h>
 
 namespace base_local_planner {
 
@@ -51,21 +53,26 @@ namespace base_local_planner {
  */
 class YawCostFunction: public base_local_planner::TrajectoryCostFunction {
 public:
-    YawCostFunction() {}
+    YawCostFunction();
     ~YawCostFunction() {}
 
     void setGoalPose(Eigen::Vector3f goal_pose);
     void setCurrentPose(Eigen::Vector3f current_pose);
 
+    double scoreTrajectoryWithLogging(Trajectory &traj, bool logging);
     double scoreTrajectory(Trajectory &traj);
 
     bool prepare() {return true;};
 
 private:
+    ros::Publisher pub_goal_dst_;
+    ros::Publisher pub_delta_goal_;
+    ros::Publisher pub_delta_ahead_;
+
     Eigen::Vector3f goal_pose_;
     Eigen::Vector3f current_pose_;
 
-    double cutoff_distance_ = 3.0;
+    double cutoff_distance_ = 2.0;
 };
 
 } /* namespace base_local_planner */

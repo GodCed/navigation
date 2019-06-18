@@ -39,6 +39,16 @@
 
 namespace base_local_planner {
 
+    YawCostFunction::YawCostFunction() {
+
+        ros::NodeHandle nh("yaw_cost");
+        pub_goal_dst_ = nh.advertise<std_msgs::Float64>("goal_distance", 1);
+        pub_delta_goal_ = nh.advertise<std_msgs::Float64>("delta_goal", 1);
+        pub_delta_ahead_ = nh.advertise<std_msgs::Float64>("delta_ahead", 1);
+
+    }
+
+
     void YawCostFunction::setGoalPose(Eigen::Vector3f goal_pose) {
         goal_pose_ = goal_pose;
     }
@@ -47,29 +57,54 @@ namespace base_local_planner {
         current_pose_ = current_pose;
     }
 
+    double YawCostFunction::scoreTrajectoryWithLogging(Trajectory &traj, bool logging) {
+
+        try {
+
+            double goal_distance_sq =
+                (goal_pose_[0] - current_pose_[0]) * (goal_pose_[0] - current_pose_[0]) +
+                (goal_pose_[1] - current_pose_[1]) * (goal_pose_[1] - goal_pose_[1]);
+
+            double delta_goal = goal_pose_[2] - current_pose_[2];
+            delta_goal >= 180.0 ? delta_goal - 360.0 : delta_goal;
+            delta_goal <= -180.0 ? delta_goal + 360.0 : delta_goal;
+            delta_goal = fabs(delta_goal);
+
+            double lx, ly, lyaw;
+            traj.getEndpoint(lx, ly, lyaw);
+
+            double delta_ahead = fabs(atan2(ly - current_pose_[1], lx - current_pose_[0]));
+
+            if( logging ) {
+                std_msgs::Float64 stat;
+
+                stat.data = goal_distance_sq;
+                pub_goal_dst_.publish(stat);
+
+                stat.data = delta_goal;
+                pub_delta_goal_.publish(stat);
+
+                stat.data = delta_ahead;
+                pub_delta_ahead_.publish(stat);
+            }
+
+            if( goal_distance_sq > cutoff_distance_ * cutoff_distance_) {
+                return delta_ahead;
+            }
+
+            else {
+                return delta_goal;
+            }
+
+        }
+
+        catch(...) {
+            return 0.0;
+        }
+    }
+
     double YawCostFunction::scoreTrajectory(Trajectory &traj) {
-
-        double goal_distance_sq =
-            (goal_pose_[0] - current_pose_[0]) * (goal_pose_[0] - current_pose_[0]) +
-            (goal_pose_[1] - current_pose_[1]) * (goal_pose_[1] - goal_pose_[1]);
-
-        double delta_goal = goal_pose_[2] - current_pose_[2];
-        delta_goal >= 180.0 ? delta_goal - 360.0 : delta_goal;
-        delta_goal <= -180.0 ? delta_goal + 360.0 : delta_goal;
-        delta_goal = fabs(delta_goal);
-
-        double lx, ly, lyaw;
-        traj.getEndpoint(lx, ly, lyaw);
-
-        double delta_ahead = fabs(atan2(ly - current_pose_[1], lx - current_pose_[0]));
-
-        if( goal_distance_sq > cutoff_distance_ * cutoff_distance_) {
-            return delta_ahead;
-        }
-
-        else {
-            return delta_goal;
-        }
+        return scoreTrajectoryWithLogging(traj, false);
     }
 
 } /* namespace base_local_planner */
