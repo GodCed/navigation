@@ -415,10 +415,11 @@ namespace navfn {
       pose.pose.position.x = world_x;
       pose.pose.position.y = world_y;
       pose.pose.position.z = 0.0;
-      pose.pose.orientation.x = 0.0;
+      /*pose.pose.orientation.x = 0.0;
       pose.pose.orientation.y = 0.0;
       pose.pose.orientation.z = 0.0;
-      pose.pose.orientation.w = 1.0;
+      pose.pose.orientation.w = 1.0;*/
+      pose.pose.orientation = goal.pose.orientation;
       plan.push_back(pose);
     }
 

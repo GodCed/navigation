@@ -59,48 +59,31 @@ namespace base_local_planner {
 
     double YawCostFunction::scoreTrajectoryWithLogging(Trajectory &traj, bool logging) {
 
-        try {
+        double current_yaw = fmod(current_pose_[2], 2.0*M_PI);
+        double target_yaw = fmod(goal_pose_[2], 2.0*M_PI);
 
-            double goal_distance_sq =
-                (goal_pose_[0] - current_pose_[0]) * (goal_pose_[0] - current_pose_[0]) +
-                (goal_pose_[1] - current_pose_[1]) * (goal_pose_[1] - goal_pose_[1]);
+        double delta_yaw = target_yaw - current_yaw;
+        delta_yaw = delta_yaw >= M_PI ? delta_yaw - 2.0*M_PI : delta_yaw;
+        delta_yaw = delta_yaw <= -M_PI ? delta_yaw + 2.0*M_PI : delta_yaw;
 
-            double delta_goal = goal_pose_[2] - current_pose_[2];
-            delta_goal >= 180.0 ? delta_goal - 360.0 : delta_goal;
-            delta_goal <= -180.0 ? delta_goal + 360.0 : delta_goal;
-            delta_goal = fabs(delta_goal);
+        double cost = (delta_yaw - traj.thetav_)*(delta_yaw - traj.thetav_);
 
-            double lx, ly, lyaw;
-            traj.getEndpoint(lx, ly, lyaw);
+        if( logging ) {
+            
+            std_msgs::Float64 msg;
 
-            double delta_ahead = fabs(atan2(ly - current_pose_[1], lx - current_pose_[0]));
+            msg.data = target_yaw;
+            pub_delta_goal_.publish(msg);
 
-            if( logging ) {
-                std_msgs::Float64 stat;
+            msg.data = delta_yaw;
+            pub_delta_ahead_.publish(msg);
 
-                stat.data = goal_distance_sq;
-                pub_goal_dst_.publish(stat);
-
-                stat.data = delta_goal;
-                pub_delta_goal_.publish(stat);
-
-                stat.data = delta_ahead;
-                pub_delta_ahead_.publish(stat);
-            }
-
-            if( goal_distance_sq > cutoff_distance_ * cutoff_distance_) {
-                return delta_ahead;
-            }
-
-            else {
-                return delta_goal;
-            }
-
+            msg.data = cost;
+            pub_goal_dst_.publish(msg);
         }
 
-        catch(...) {
-            return 0.0;
-        }
+        return cost;
+
     }
 
     double YawCostFunction::scoreTrajectory(Trajectory &traj) {
