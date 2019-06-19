@@ -63,6 +63,7 @@ namespace base_local_planner {
         double x = current_pose_[0];
         double y = current_pose_[1];
         double th = fmod(current_pose_[2], 2.0*M_PI);
+        double vtrans = traj.xv_*traj.xv_ + traj.yv_*traj.yv_;
 
         // Goal position
         double gx = goal_pose_[0];
@@ -91,7 +92,10 @@ namespace base_local_planner {
         delta_yaw = delta_yaw <= -M_PI ? delta_yaw + 2.0*M_PI : delta_yaw;
 
         // Cost according to if the trajectory steers in the correct direction
-        double cost = (delta_yaw - traj.thetav_)*(delta_yaw - traj.thetav_);
+        double thcost = (delta_yaw - traj.thetav_)*(delta_yaw - traj.thetav_);
+
+        // Cost according to the translation velocity
+        double vcost = fabs(delta_yaw) * vtrans;
 
         if( logging ) {
             
@@ -107,7 +111,7 @@ namespace base_local_planner {
             pub_goal_dst_.publish(msg);
         }
 
-        return cost;
+        return thcost + vcost;
 
     }
 
