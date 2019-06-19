@@ -59,26 +59,51 @@ namespace base_local_planner {
 
     double YawCostFunction::scoreTrajectoryWithLogging(Trajectory &traj, bool logging) {
 
-        double current_yaw = fmod(current_pose_[2], 2.0*M_PI);
-        double target_yaw = fmod(goal_pose_[2], 2.0*M_PI);
+        // AGV current position
+        double x = current_pose_[0];
+        double y = current_pose_[1];
+        double th = fmod(current_pose_[2], 2.0*M_PI);
 
-        double delta_yaw = target_yaw - current_yaw;
+        // Goal position
+        double gx = goal_pose_[0];
+        double gy = goal_pose_[1];
+        double gth = fmod(goal_pose_[2], 2.0*M_PI);
+        double gdst = (gx-x)*(gx-x)+(gy-y)*(gy-y);
+
+        // Trajectory endpoint
+        double endx, endy, endth;
+        if( !traj.getPointsSize() > 0)
+            return 0.0;
+        traj.getEndpoint(endx, endy, endth);
+        endth = atan2(endy-y, endx-x);
+        endth = fmod(endth + 2.0*M_PI, 2.0*M_PI);
+
+        // Switch target_yaw according to goal distance
+        double target_yaw;
+        if(gdst <= cutoff_distance_*cutoff_distance_)
+            target_yaw = gth;
+        else
+            target_yaw = endth;
+
+        // Angular distance to go to desired yaw
+        double delta_yaw = target_yaw - th;
         delta_yaw = delta_yaw >= M_PI ? delta_yaw - 2.0*M_PI : delta_yaw;
         delta_yaw = delta_yaw <= -M_PI ? delta_yaw + 2.0*M_PI : delta_yaw;
 
+        // Cost according to if the trajectory steers in the correct direction
         double cost = (delta_yaw - traj.thetav_)*(delta_yaw - traj.thetav_);
 
         if( logging ) {
             
             std_msgs::Float64 msg;
 
-            msg.data = target_yaw;
+            msg.data = endth;
             pub_delta_goal_.publish(msg);
 
-            msg.data = delta_yaw;
+            msg.data = th;
             pub_delta_ahead_.publish(msg);
 
-            msg.data = cost;
+            msg.data = gdst;
             pub_goal_dst_.publish(msg);
         }
 
