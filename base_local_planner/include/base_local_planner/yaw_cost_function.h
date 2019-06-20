@@ -58,6 +58,8 @@ public:
 
     void setGoalPose(Eigen::Vector3f goal_pose);
     void setCurrentPose(Eigen::Vector3f current_pose);
+    void setCutoffDistance(double cutoff_distance);
+    void useYawFromPlan(bool use_yaw_from_plan);
 
     double scoreTrajectoryWithLogging(Trajectory &traj, bool logging);
     double scoreTrajectory(Trajectory &traj);
@@ -72,6 +74,7 @@ private:
     Eigen::Vector3f goal_pose_;
     Eigen::Vector3f current_pose_;
 
+    bool use_yaw_from_plan_ = true;
     double cutoff_distance_ = 2.0;
 };
 

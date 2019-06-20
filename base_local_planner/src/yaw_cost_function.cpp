@@ -57,6 +57,14 @@ namespace base_local_planner {
         current_pose_ = current_pose;
     }
 
+    void YawCostFunction::setCutoffDistance(double cutoff_distance) {
+        cutoff_distance_ = cutoff_distance;
+    }
+
+    void YawCostFunction::useYawFromPlan(bool use_yaw_from_plan) {
+        use_yaw_from_plan_ = use_yaw_from_plan;
+    }
+
     double YawCostFunction::scoreTrajectoryWithLogging(Trajectory &traj, bool logging) {
 
         // AGV current position
@@ -81,7 +89,7 @@ namespace base_local_planner {
 
         // Switch target_yaw according to goal distance
         double target_yaw;
-        if(gdst <= cutoff_distance_*cutoff_distance_)
+        if((gdst <= cutoff_distance_*cutoff_distance_) || use_yaw_from_plan_)
             target_yaw = gth;
         else
             target_yaw = endth;

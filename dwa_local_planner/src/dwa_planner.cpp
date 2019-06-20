@@ -84,7 +84,10 @@ namespace dwa_local_planner {
     obstacle_costs_.setParams(config.max_vel_trans, config.max_scaling_factor, config.scaling_speed);
 
     twirling_costs_.setScale(config.twirling_scale);
+
     yaw_costs_.setScale(config.yaw_scale);
+    yaw_costs_.setCutoffDistance(config.yaw_cutoff_distance);
+    yaw_costs_.useYawFromPlan(config.use_yaw_from_plan);
 
     int vx_samp, vy_samp, vth_samp;
     vx_samp = config.vx_samples;
