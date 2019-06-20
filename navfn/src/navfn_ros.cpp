@@ -39,6 +39,7 @@
 #include <costmap_2d/cost_values.h>
 #include <costmap_2d/costmap_2d.h>
 #include <sensor_msgs/point_cloud2_iterator.h>
+#include <tf2/LinearMath/Quaternion.h>
 
 //register this planner as a BaseGlobalPlanner plugin
 PLUGINLIB_EXPORT_CLASS(navfn::NavfnROS, nav_core::BaseGlobalPlanner)
@@ -289,7 +290,7 @@ namespace navfn {
 
     if(found_legal){
       //extract the plan
-      if(getPlanFromPotential(best_pose, plan)){
+      if(getPlanFromPotential(start, best_pose, plan)){
         //make sure the goal we push on has the same timestamp as the rest of the plan
         geometry_msgs::PoseStamped goal_copy = best_pose;
         goal_copy.header.stamp = ros::Time::now();
@@ -364,7 +365,7 @@ namespace navfn {
     plan_pub_.publish(gui_path);
   }
 
-  bool NavfnROS::getPlanFromPotential(const geometry_msgs::PoseStamped& goal, std::vector<geometry_msgs::PoseStamped>& plan){
+  bool NavfnROS::getPlanFromPotential(const geometry_msgs::PoseStamped& start, const geometry_msgs::PoseStamped& goal, std::vector<geometry_msgs::PoseStamped>& plan){
     if(!initialized_){
       ROS_ERROR("This planner has not been initialized yet, but it is being used, please call initialize() before use");
       return false;
@@ -404,6 +405,7 @@ namespace navfn {
     int len = planner_->getPathLen();
     ros::Time plan_time = ros::Time::now();
 
+    //convert plan to world poses
     for(int i = len - 1; i >= 0; --i){
       //convert the plan to world coordinates
       double world_x, world_y;
@@ -415,12 +417,89 @@ namespace navfn {
       pose.pose.position.x = world_x;
       pose.pose.position.y = world_y;
       pose.pose.position.z = 0.0;
-      /*pose.pose.orientation.x = 0.0;
-      pose.pose.orientation.y = 0.0;
-      pose.pose.orientation.z = 0.0;
-      pose.pose.orientation.w = 1.0;*/
-      pose.pose.orientation = goal.pose.orientation;
+
       plan.push_back(pose);
+    }
+
+    //
+    // Compute yaw for each pose
+    //
+
+    // Plan length
+    double full_length = 0.0;
+    double last_wx = start.pose.position.x;
+    double last_wy = start.pose.position.y;
+
+    for(int i = 0; i < len; i++) {
+      double sx = plan[i].pose.position.x;
+      double sy = plan[i].pose.position.y;
+      double dx = sx - last_wx;
+      double dy = sy - last_wy;
+
+      double d = sqrt(dx*dx + dy*dy);
+      full_length += d;
+      
+      last_wx = sx;
+      last_wy = sy;
+    }
+
+    double length_per_step = full_length / (double)len;
+    int ahead = (int)(1.5 / length_per_step);
+
+    double length = 0;
+    last_wx = plan[0].pose.position.x;
+    last_wy = plan[0].pose.position.y;
+    for(int i = 0; i < len; i++) {
+    
+      // Compute current travelled distance
+      double sx = plan[i].pose.position.x;
+      double sy = plan[i].pose.position.y;
+      double dx = sx - last_wx;
+      double dy = sy - last_wy;
+
+      double d = sqrt(dx*dx + dy*dy);
+      length += d;
+
+      // We approach the goal so we match the goal
+      if(length + 4.0 > full_length) {
+        plan[i].pose.orientation = goal.pose.orientation;
+      }
+
+      // We are just leaving so we match the start
+      else if(length < 8.0) {
+        plan[i].pose.orientation = start.pose.orientation;
+      }
+
+      // We are travelling so we look ahead
+      else {
+        // Get index of backward step
+        int iahead;
+        if(i - ahead < 0) {
+          iahead = 0;
+        }
+        else {
+          iahead = i - ahead;
+        }
+
+        // Get XY ahead
+        double ax = plan[iahead].pose.position.x;
+        double ay = plan[iahead].pose.position.y;
+        
+        // Compute yaw toward XY ahead
+        double yaw = atan2(sy - ay, sx -ax);
+        yaw = fmod(yaw + 2.0*M_PI, 2.0*M_PI);
+
+        // Transform yaw to quaternion
+        tf2::Quaternion quat;
+        quat.setRPY(0.0, 0.0, yaw);
+        plan[i].pose.orientation.w = quat.getW();
+        plan[i].pose.orientation.x = quat.getX();
+        plan[i].pose.orientation.y = quat.getY();
+        plan[i].pose.orientation.z = quat.getZ();
+      }
+
+      last_wx = sx;
+      last_wy = sy;
     }
 
     //publish the plan for visualization purposes
