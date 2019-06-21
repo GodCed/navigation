@@ -446,6 +446,7 @@ namespace navfn {
     double length_per_step = full_length / (double)len;
     int offset = (int)(0.5 / length_per_step);
 
+    // Compute yaw at each step
     double length = 0;
     last_wx = plan[0].pose.position.x;
     last_wy = plan[0].pose.position.y;
@@ -461,12 +462,12 @@ namespace navfn {
       length += d;
 
       // We approach the goal so we match the goal
-      if(length + 4.0 > full_length) {
+      if(length + 7.0 > full_length) {
         plan[i].pose.orientation = goal.pose.orientation;
       }
 
       // We are just leaving so we match the start
-      else if(length < 8.0) {
+      else if(length < 7.0) {
         plan[i].pose.orientation = start.pose.orientation;
       }
 
@@ -513,6 +514,12 @@ namespace navfn {
 
       last_wx = sx;
       last_wy = sy;
+    }
+
+    // shift ahead yaw because local planner receive a goal ahead
+    offset = 2.0 / length_per_step;
+    for(int i = len - 1; i >= offset; --i) {
+      plan[i].pose.orientation = plan[i - offset].pose.orientation;
     }
 
     //publish the plan for visualization purposes
