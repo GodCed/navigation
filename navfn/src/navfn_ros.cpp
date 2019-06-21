@@ -444,7 +444,7 @@ namespace navfn {
     }
 
     double length_per_step = full_length / (double)len;
-    int ahead = (int)(1.5 / length_per_step);
+    int offset = (int)(0.5 / length_per_step);
 
     double length = 0;
     last_wx = plan[0].pose.position.x;
@@ -472,21 +472,34 @@ namespace navfn {
 
       // We are travelling so we look ahead
       else {
-        // Get index of backward step
+        // Get index of forward step
         int iahead;
-        if(i - ahead < 0) {
-          iahead = 0;
+        if(i + offset > len - 1) {
+          iahead = len - 1;
         }
         else {
-          iahead = i - ahead;
+          iahead = i + offset;
+        }
+
+        // Get index of backward step
+        int iback;
+        if(i - offset < 0) {
+          iback = 0;
+        }
+        else {
+          iback = i - offset;
         }
 
         // Get XY ahead
         double ax = plan[iahead].pose.position.x;
         double ay = plan[iahead].pose.position.y;
+
+        // Get XY back
+        double bx = plan[iback].pose.position.x;
+        double by = plan[iback].pose.position.y;
         
-        // Compute yaw toward XY ahead
-        double yaw = atan2(sy - ay, sx -ax);
+        // Compute yaw toward XY ahead from XY back
+        double yaw = atan2(ay - by, ax - bx);
         yaw = fmod(yaw + 2.0*M_PI, 2.0*M_PI);
 
         // Transform yaw to quaternion
