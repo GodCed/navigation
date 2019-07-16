@@ -462,12 +462,12 @@ namespace navfn {
       length += d;
 
       // We approach the goal so we match the goal
-      if(length + 7.0 > full_length) {
+      if(length + 4.0 > full_length) {
         plan[i].pose.orientation = goal.pose.orientation;
       }
 
       // We are just leaving so we match the start
-      else if(length < 7.0) {
+      else if(length < 6.0) {
         plan[i].pose.orientation = start.pose.orientation;
       }
 
