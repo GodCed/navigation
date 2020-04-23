@@ -34,6 +34,7 @@
 *
 * Author: Eitan Marder-Eppstein
 *********************************************************************/
+#include <cmath>
 #include <navfn/navfn_ros.h>
 #include <pluginlib/class_list_macros.h>
 #include <costmap_2d/cost_values.h>
@@ -476,10 +477,12 @@ namespace navfn {
 
       user_map::OrientationMode orientation_mode = user_map::OrientationMode::none;
       int orientation_value = 0;
+      double orientation_rad = 0;
 
       if(has_user_orientation_) {
         orientation_value = static_cast<int>(user_map_.atPosition("orientation", grid_map::Position(sx, sy)));
         orientation_mode = user_map::OrientationMode_from_value(orientation_value);
+        orientation_rad = (orientation_value % 1000) * M_PI / 180;
       }
 
       // Orientation is specified by user
@@ -490,7 +493,7 @@ namespace navfn {
 
         switch (orientation_mode) {
           case user_map::OrientationMode::fixed:
-            quaternion.setRPY(0, 0, orientation_value % 1000);
+            quaternion.setRPY(0, 0, orientation_rad);
             break;
           case user_map::OrientationMode::parallel: break;
           case user_map::OrientationMode::tangent: break;
