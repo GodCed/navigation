@@ -17,6 +17,8 @@ find_package(catkin REQUIRED
         tf2_ros
         sensor_msgs
         visualization_msgs
+        grid_map_ros
+        user_map
         )
 
 find_package(Eigen3 REQUIRED)
@@ -55,6 +57,8 @@ catkin_package(
         roscpp
         sensor_msgs
         visualization_msgs
+        grid_map_ros
+        user_map
 )
 
 check_include_file(sys/time.h HAVE_SYS_TIME_H)

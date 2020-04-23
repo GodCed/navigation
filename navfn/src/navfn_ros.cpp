@@ -40,6 +40,8 @@
 #include <costmap_2d/costmap_2d.h>
 #include <sensor_msgs/point_cloud2_iterator.h>
 #include <tf2/LinearMath/Quaternion.h>
+#include <grid_map_ros/GridMapRosConverter.hpp>
+#include <user_map/orientation_mode.hpp>
 
 //register this planner as a BaseGlobalPlanner plugin
 PLUGINLIB_EXPORT_CLASS(navfn::NavfnROS, nav_core::BaseGlobalPlanner)
@@ -47,16 +49,16 @@ PLUGINLIB_EXPORT_CLASS(navfn::NavfnROS, nav_core::BaseGlobalPlanner)
 namespace navfn {
 
   NavfnROS::NavfnROS() 
-    : costmap_(NULL),  planner_(), initialized_(false), allow_unknown_(true) {}
+    : costmap_(nullptr),  planner_(), initialized_(false), allow_unknown_(true), has_user_orientation_(false) {}
 
   NavfnROS::NavfnROS(std::string name, costmap_2d::Costmap2DROS* costmap_ros)
-    : costmap_(NULL),  planner_(), initialized_(false), allow_unknown_(true) {
+    : costmap_(nullptr),  planner_(), initialized_(false), allow_unknown_(true) {
       //initialize the planner
       initialize(name, costmap_ros);
   }
 
   NavfnROS::NavfnROS(std::string name, costmap_2d::Costmap2D* costmap, std::string global_frame)
-    : costmap_(NULL),  planner_(), initialized_(false), allow_unknown_(true) {
+    : costmap_(nullptr),  planner_(), initialized_(false), allow_unknown_(true), has_user_orientation_(false) {
       //initialize the planner
       initialize(name, costmap, global_frame);
   }
@@ -65,8 +67,14 @@ namespace navfn {
     if(!initialized_){
       costmap_ = costmap;
       global_frame_ = global_frame;
-      planner_ = boost::shared_ptr<NavFn>(new NavFn(costmap_->getSizeInCellsX(), costmap_->getSizeInCellsY()));
+      planner_ = boost::shared_ptr<NavFn>(
+            new NavFn(
+              static_cast<int>(costmap_->getSizeInCellsX()),
+              static_cast<int>(costmap_->getSizeInCellsY())
+            )
+      );
 
+      ros::NodeHandle nh;
       ros::NodeHandle private_nh("~/" + name);
 
       plan_pub_ = private_nh.advertise<nav_msgs::Path>("plan", 1);
@@ -83,6 +91,8 @@ namespace navfn {
       private_nh.param("default_tolerance", default_tolerance_, 0.0);
 
       make_plan_srv_ =  private_nh.advertiseService("make_plan", &NavfnROS::makePlanService, this);
+
+      user_map_sub_ = nh.subscribe("user_map", 1, &NavfnROS::user_map_callback, this);
 
       initialized_ = true;
     }
@@ -395,24 +405,24 @@ namespace navfn {
     }
 
     int map_goal[2];
-    map_goal[0] = mx;
-    map_goal[1] = my;
+    map_goal[0] = static_cast<int>(mx);
+    map_goal[1] = static_cast<int>(my);
 
     planner_->setStart(map_goal);
 
-    planner_->calcPath(costmap_->getSizeInCellsX() * 4);
+    planner_->calcPath(static_cast<int>(costmap_->getSizeInCellsX() * 4));
 
     //extract the plan
     float *x = planner_->getPathX();
     float *y = planner_->getPathY();
-    int len = planner_->getPathLen();
+    unsigned long len = static_cast<unsigned long>(planner_->getPathLen());
     ros::Time plan_time = ros::Time::now();
 
     //convert plan to world poses
-    for(int i = len - 1; i >= 0; --i){
+    for(int i = static_cast<int>(len) - 1; i >= 0; --i){
       //convert the plan to world coordinates
       double world_x, world_y;
-      mapToWorld(x[i], y[i], world_x, world_y);
+      mapToWorld(static_cast<double>(x[i]), static_cast<double>(y[i]), world_x, world_y);
 
       geometry_msgs::PoseStamped pose;
       pose.header.stamp = plan_time;
@@ -433,7 +443,7 @@ namespace navfn {
     double last_wx = start.pose.position.x;
     double last_wy = start.pose.position.y;
 
-    for(int i = 0; i < len; i++) {
+    for(unsigned long i = 0; i < len; i++) {
       double sx = plan[i].pose.position.x;
       double sy = plan[i].pose.position.y;
       double dx = sx - last_wx;
@@ -446,14 +456,14 @@ namespace navfn {
       last_wy = sy;
     }
 
-    double length_per_step = full_length / (double)len;
-    int offset = (int)(0.5 / length_per_step);
+    double length_per_step = full_length / len;
+    unsigned long offset = static_cast<unsigned long>(0.5 / length_per_step);
 
     // Compute yaw at each step
     double length = 0;
     last_wx = plan[0].pose.position.x;
     last_wy = plan[0].pose.position.y;
-    for(int i = 0; i < len; i++) {
+    for(unsigned long i = 0; i < len; i++) {
     
       // Compute current travelled distance
       double sx = plan[i].pose.position.x;
@@ -464,8 +474,37 @@ namespace navfn {
       double d = sqrt(dx*dx + dy*dy);
       length += d;
 
+      user_map::OrientationMode orientation_mode = user_map::OrientationMode::none;
+      int orientation_value = 0;
+
+      if(has_user_orientation_) {
+        orientation_value = static_cast<int>(user_map_.atPosition("orientation", grid_map::Position(sx, sy)));
+        orientation_mode = user_map::OrientationMode_from_value(orientation_value);
+      }
+
+      // Orientation is specified by user
+      if(orientation_mode != user_map::OrientationMode::none) {
+
+        ROS_INFO_THROTTLE(1, "NavFn will use user orientation for current point.");
+        tf2::Quaternion quaternion;
+
+        switch (orientation_mode) {
+          case user_map::OrientationMode::fixed:
+            quaternion.setRPY(0, 0, orientation_value % 1000);
+            break;
+          case user_map::OrientationMode::parallel: break;
+          case user_map::OrientationMode::tangent: break;
+          default: break;
+        }
+
+        plan[i].pose.orientation.w = quaternion.getW();
+        plan[i].pose.orientation.x = quaternion.getX();
+        plan[i].pose.orientation.y = quaternion.getY();
+        plan[i].pose.orientation.z = quaternion.getZ();
+      }
+
       // We approach the goal so we match the goal
-      if(length + 4.0 > full_length) {
+      else if(length + 4.0 > full_length) {
         plan[i].pose.orientation = goal.pose.orientation;
       }
 
@@ -477,7 +516,7 @@ namespace navfn {
       // We are travelling so we look ahead
       else {
         // Get index of forward step
-        int iahead;
+        unsigned long iahead;
         if(i + offset > len - 1) {
           iahead = len - 1;
         }
@@ -486,8 +525,8 @@ namespace navfn {
         }
 
         // Get index of backward step
-        int iback;
-        if(i - offset < 0) {
+        unsigned long iback;
+        if(static_cast<long>(i) - static_cast<long>(offset) < 0) {
           iback = 0;
         }
         else {
@@ -520,13 +559,24 @@ namespace navfn {
     }
 
     // shift ahead yaw because local planner receive a goal ahead
-    offset = 2.0 / length_per_step;
-    for(int i = len - 1; i >= offset; --i) {
+    offset = static_cast<unsigned long>(2.0 / length_per_step);
+    for(unsigned long i = len - 1; i >= offset; --i) {
       plan[i].pose.orientation = plan[i - offset].pose.orientation;
     }
 
     //publish the plan for visualization purposes
     publishPlan(plan, 0.0, 1.0, 0.0, 0.0);
     return !plan.empty();
+  }
+
+  void NavfnROS::user_map_callback(const grid_map_msgs::GridMap::ConstPtr &msg) {
+    grid_map::GridMapRosConverter::fromMessage(*msg, user_map_);
+    ROS_INFO("NavFn received user map.");
+
+    auto layers = user_map_.getLayers();
+    has_user_orientation_ = std::find(layers.begin(), layers.end(), std::string("orientation")) != layers.end();
+    if(has_user_orientation_) {
+      ROS_INFO("NavFn user map contains orientation data.");
+    }
   }
 };
