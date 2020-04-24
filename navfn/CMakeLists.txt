@@ -19,6 +19,7 @@ find_package(catkin REQUIRED
         visualization_msgs
         grid_map_ros
         user_map
+        angles
         )
 
 find_package(Eigen3 REQUIRED)
@@ -59,6 +60,7 @@ catkin_package(
         visualization_msgs
         grid_map_ros
         user_map
+        angles
 )
 
 check_include_file(sys/time.h HAVE_SYS_TIME_H)

@@ -41,6 +41,8 @@
 #include <costmap_2d/costmap_2d.h>
 #include <sensor_msgs/point_cloud2_iterator.h>
 #include <tf2/LinearMath/Quaternion.h>
+#include <tf2/convert.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <grid_map_ros/GridMapRosConverter.hpp>
 #include <user_map/orientation_mode.hpp>
 
@@ -487,23 +489,49 @@ namespace navfn {
 
       // Orientation is specified by user
       if(orientation_mode != user_map::OrientationMode::none) {
-
         ROS_INFO_THROTTLE(1, "NavFn will use user orientation for current point.");
-        tf2::Quaternion quaternion;
+
+        tf2::Quaternion user_quaternion, last_quaternion, lower_quaternion, upper_quaternion;
+        double lower_distance, upper_distance;
+
+        if(i > 1) { // Get parallel yaw closest to preceding pose yaw
+          tf2::convert(plan[i-1].pose.orientation, last_quaternion);
+        }
+        else {  // Get parallel yaw closest to start
+          tf2::convert(start.pose.orientation, last_quaternion);
+        }
 
         switch (orientation_mode) {
-          case user_map::OrientationMode::fixed:
-            quaternion.setRPY(0, 0, orientation_rad);
+          case user_map::OrientationMode::fixed: {
+            user_quaternion.setRPY(0, 0, orientation_rad);
             break;
-          case user_map::OrientationMode::parallel: break;
-          case user_map::OrientationMode::tangent: break;
+          }
+
+        case user_map::OrientationMode::parallel: {
+            lower_quaternion.setRPY(0, 0, orientation_rad);
+            upper_quaternion.setRPY(0, 0, orientation_rad + M_PI);
+
+            lower_distance = fabs(last_quaternion.angleShortestPath(lower_quaternion));
+            upper_distance = fabs(last_quaternion.angleShortestPath(upper_quaternion));
+
+            user_quaternion = lower_distance < upper_distance ? lower_quaternion : upper_quaternion;
+            break;
+          }
+
+          case user_map::OrientationMode::tangent: {
+            lower_quaternion.setRPY(0, 0, orientation_rad + M_PI_2);
+            upper_quaternion.setRPY(0, 0, orientation_rad + 3 * M_PI_2);
+
+            lower_distance = fabs(last_quaternion.angleShortestPath(lower_quaternion));
+            upper_distance = fabs(last_quaternion.angleShortestPath(upper_quaternion));
+
+            user_quaternion = lower_distance < upper_distance ? lower_quaternion : upper_quaternion;
+            break;
+          }
           default: break;
         }
 
-        plan[i].pose.orientation.w = quaternion.getW();
-        plan[i].pose.orientation.x = quaternion.getX();
-        plan[i].pose.orientation.y = quaternion.getY();
-        plan[i].pose.orientation.z = quaternion.getZ();
+        tf2::convert(user_quaternion, plan[i].pose.orientation);
       }
 
       // We approach the goal so we match the goal

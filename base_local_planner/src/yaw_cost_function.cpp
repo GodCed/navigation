@@ -36,6 +36,7 @@
  *********************************************************************/
 
 #include <base_local_planner/yaw_cost_function.h>
+#include <angles/angles.h>
 
 namespace base_local_planner {
 
@@ -72,15 +73,13 @@ namespace base_local_planner {
 
         // Trajectory endpoint
         double endx, endy, endth;
-        if( !(traj.getPointsSize() > 0))
-            return 0.0;
         traj.getEndpoint(endx, endy, endth);
 
         // Trajectory velocity
         double vtrans = sqrt(traj.xv_*traj.xv_ + traj.yv_*traj.yv_);
 
         // Cost according to if the trajectory steers in the correct direction
-        double thcost = fabs(gth - endth);
+        double thcost = fabs(angles::shortest_angular_distance(endth, gth));
 
         // Cost according to the translation velocity
         double vcost = thcost * 10*vtrans;
