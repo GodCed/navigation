@@ -446,6 +446,9 @@ namespace navfn {
     double last_wx = start.pose.position.x;
     double last_wy = start.pose.position.y;
 
+    // Leaving and approach distance
+    unsigned long iStart = len-1, iApproach = 0;
+
     for(unsigned long i = 0; i < len; i++) {
       double sx = plan[i].pose.position.x;
       double sy = plan[i].pose.position.y;
@@ -457,6 +460,18 @@ namespace navfn {
       
       last_wx = sx;
       last_wy = sy;
+
+      // Check if we are clear to turn
+      bool clearToTurn = costmap_->getCost(static_cast<unsigned int>(x[i]), static_cast<unsigned int>(y[i])) == costmap_2d::FREE_SPACE;
+      if (clearToTurn && i < iStart) {
+        iStart = i;
+      }
+      if (clearToTurn && i > iApproach) {
+        iApproach = i;
+      }
+
+      ROS_INFO("iStart is %lu", iStart);
+      ROS_INFO("iApproach is %lu", iApproach);
     }
 
     double length_per_step = full_length / len;
@@ -467,7 +482,7 @@ namespace navfn {
     last_wx = plan[0].pose.position.x;
     last_wy = plan[0].pose.position.y;
     for(unsigned long i = 0; i < len; i++) {
-    
+
       // Compute current travelled distance
       double sx = plan[i].pose.position.x;
       double sy = plan[i].pose.position.y;
@@ -477,6 +492,7 @@ namespace navfn {
       double d = sqrt(dx*dx + dy*dy);
       length += d;
 
+      // Initialize user orientation from map if it exists
       user_map::OrientationMode orientation_mode = user_map::OrientationMode::none;
       int orientation_value = 0;
       double orientation_rad = 0;
@@ -487,20 +503,64 @@ namespace navfn {
         orientation_rad = (orientation_value % 1000) * M_PI / 180;
       }
 
+      // Get last orientation for tangent calculations
+      tf2::Quaternion last_quaternion, lower_quaternion, upper_quaternion;
+      double lower_distance, upper_distance;
+      if(i > 1) { // Get parallel yaw closest to preceding pose yaw
+        tf2::convert(plan[i-1].pose.orientation, last_quaternion);
+      }
+      else {  // Get parallel yaw closest to start
+        tf2::convert(start.pose.orientation, last_quaternion);
+      }
+
+      /*
+       * Compute tangent orientation
+       */
+
+      // Get index of forward step
+      unsigned long iahead;
+      if(i + offset > len - 1) {
+        iahead = len - 1;
+      }
+      else {
+        iahead = i + offset;
+      }
+
+      // Get index of backward step
+      unsigned long iback;
+      if(static_cast<long>(i) - static_cast<long>(offset) < 0) {
+        iback = 0;
+      }
+      else {
+        iback = i - offset;
+      }
+
+      // Get XY ahead
+      double ax = plan[iahead].pose.position.x;
+      double ay = plan[iahead].pose.position.y;
+
+      // Get XY back
+      double bx = plan[iback].pose.position.x;
+      double by = plan[iback].pose.position.y;
+
+      // Compute yaw toward XY ahead from XY back
+      double yaw = atan2(ay - by, ax - bx);
+      yaw = fmod(yaw + 2.0*M_PI, 2.0*M_PI);
+
+      // Transform yaw to quaternion
+      lower_quaternion.setRPY(0, 0, yaw);
+      upper_quaternion.setRPY(0, 0, yaw + M_PI);
+
+      lower_distance = fabs(last_quaternion.angleShortestPath(lower_quaternion));
+      upper_distance = fabs(last_quaternion.angleShortestPath(upper_quaternion));
+
+      tf2::Quaternion tangent_quaternion = lower_distance <= upper_distance ? lower_quaternion : upper_quaternion;
+
       // Orientation is specified by user
       if(orientation_mode != user_map::OrientationMode::none) {
         ROS_INFO_THROTTLE(1, "NavFn will use user orientation for current point.");
 
-        tf2::Quaternion user_quaternion, last_quaternion, lower_quaternion, upper_quaternion;
-        double lower_distance, upper_distance;
-
-        if(i > 1) { // Get parallel yaw closest to preceding pose yaw
-          tf2::convert(plan[i-1].pose.orientation, last_quaternion);
-        }
-        else {  // Get parallel yaw closest to start
-          tf2::convert(start.pose.orientation, last_quaternion);
-        }
-
+        tf2::Quaternion user_quaternion;
         switch (orientation_mode) {
           case user_map::OrientationMode::fixed: {
             user_quaternion.setRPY(0, 0, orientation_rad);
@@ -517,15 +577,8 @@ namespace navfn {
             user_quaternion = lower_distance < upper_distance ? lower_quaternion : upper_quaternion;
             break;
           }
-
           case user_map::OrientationMode::tangent: {
-            lower_quaternion.setRPY(0, 0, orientation_rad + M_PI_2);
-            upper_quaternion.setRPY(0, 0, orientation_rad + 3 * M_PI_2);
-
-            lower_distance = fabs(last_quaternion.angleShortestPath(lower_quaternion));
-            upper_distance = fabs(last_quaternion.angleShortestPath(upper_quaternion));
-
-            user_quaternion = lower_distance < upper_distance ? lower_quaternion : upper_quaternion;
+            user_quaternion = tangent_quaternion;
             break;
           }
           default: break;
@@ -535,54 +588,18 @@ namespace navfn {
       }
 
       // We approach the goal so we match the goal
-      else if(length + 4.0 > full_length) {
+      else if(i >= iApproach) {
         plan[i].pose.orientation = goal.pose.orientation;
       }
 
       // We are just leaving so we match the start
-      else if(length < 6.0) {
+      else if(i <= iStart) {
         plan[i].pose.orientation = start.pose.orientation;
       }
 
       // We are travelling so we look ahead
       else {
-        // Get index of forward step
-        unsigned long iahead;
-        if(i + offset > len - 1) {
-          iahead = len - 1;
-        }
-        else {
-          iahead = i + offset;
-        }
-
-        // Get index of backward step
-        unsigned long iback;
-        if(static_cast<long>(i) - static_cast<long>(offset) < 0) {
-          iback = 0;
-        }
-        else {
-          iback = i - offset;
-        }
-
-        // Get XY ahead
-        double ax = plan[iahead].pose.position.x;
-        double ay = plan[iahead].pose.position.y;
-
-        // Get XY back
-        double bx = plan[iback].pose.position.x;
-        double by = plan[iback].pose.position.y;
-        
-        // Compute yaw toward XY ahead from XY back
-        double yaw = atan2(ay - by, ax - bx);
-        yaw = fmod(yaw + 2.0*M_PI, 2.0*M_PI);
-
-        // Transform yaw to quaternion
-        tf2::Quaternion quat;
-        quat.setRPY(0.0, 0.0, yaw);
-        plan[i].pose.orientation.w = quat.getW();
-        plan[i].pose.orientation.x = quat.getX();
-        plan[i].pose.orientation.y = quat.getY();
-        plan[i].pose.orientation.z = quat.getZ();
+        tf2::convert(tangent_quaternion, plan[i].pose.orientation);
       }
 
       last_wx = sx;
@@ -590,7 +607,7 @@ namespace navfn {
     }
 
     // shift ahead yaw because local planner receive a goal ahead
-    offset = static_cast<unsigned long>(2.0 / length_per_step);
+    offset = static_cast<unsigned long>(3.0 / length_per_step);
     for(unsigned long i = len - 1; i >= offset; --i) {
       plan[i].pose.orientation = plan[i - offset].pose.orientation;
     }
