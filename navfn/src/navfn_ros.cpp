@@ -462,6 +462,7 @@ namespace navfn {
       last_wy = sy;
 
       // Check if we are clear to turn
+
       bool clearToTurn = costmap_->getCost(static_cast<unsigned int>(x[i]), static_cast<unsigned int>(y[i])) == costmap_2d::FREE_SPACE;
       if (clearToTurn && i < iStart) {
         iStart = i;
@@ -469,13 +470,29 @@ namespace navfn {
       if (clearToTurn && i > iApproach) {
         iApproach = i;
       }
-
-      ROS_INFO("iStart is %lu", iStart);
-      ROS_INFO("iApproach is %lu", iApproach);
     }
 
+    /*unsigned long index_padding = static_cast<unsigned long>(1.0 / costmap_->getResolution());
+    if (iStart + index_padding < len) {
+      iStart += index_padding;
+    }
+    else {
+      iStart = len-1;
+    }
+
+    if (iApproach > index_padding) {
+      iApproach -= index_padding;
+    }
+    else {
+      iApproach = 0;
+    }*/
+
+    ROS_INFO("iStart is %lu", iStart);
+    ROS_INFO("iApproach is %lu", iApproach);
+    ROS_INFO("traj last index is %lu", len-1);
+
     double length_per_step = full_length / len;
-    unsigned long offset = static_cast<unsigned long>(0.5 / length_per_step);
+    unsigned long offset = static_cast<unsigned long>(0.2 / length_per_step);
 
     // Compute yaw at each step
     double length = 0;
@@ -610,6 +627,11 @@ namespace navfn {
     offset = static_cast<unsigned long>(3.0 / length_per_step);
     for(unsigned long i = len - 1; i >= offset; --i) {
       plan[i].pose.orientation = plan[i - offset].pose.orientation;
+    }
+
+    // Apply start orientation to plan until the offset
+    for(unsigned long i = 0; (i < offset && i < len-1); i++) {
+      plan[i].pose.orientation = plan[0].pose.orientation;
     }
 
     //publish the plan for visualization purposes
