@@ -43,9 +43,9 @@ namespace base_local_planner {
     YawCostFunction::YawCostFunction() {
 
         ros::NodeHandle nh("yaw_cost");   
-        pub_goal_th_ = nh.advertise<std_msgs::Float64>("goal_th", 1);
-        pub_start_th_ = nh.advertise<std_msgs::Float64>("start_th", 1);
-        pub_end_th_ = nh.advertise<std_msgs::Float64>("end_th", 1);
+        pub_goal_th_ = nh.advertise<std_msgs::Float64>("goal_th", 20);
+        pub_start_th_ = nh.advertise<std_msgs::Float64>("start_th", 20);
+        pub_end_th_ = nh.advertise<std_msgs::Float64>("end_th", 20);
     }
 
 
@@ -89,6 +89,9 @@ namespace base_local_planner {
         // Cost according to the translation velocity
         double vcost = 10*vtrans*thcost;
 
+        // Cost if the robot is drunk and turning away from the target
+        double wrongcost = traj.thetav_ * angles::shortest_angular_distance(endth, gth) >= 0 ? 0.0: 100.0;
+
         if( logging ) {
             
             std_msgs::Float64 msg;
@@ -112,7 +115,7 @@ namespace base_local_planner {
         double dircost = -2.0 * angles::shortest_angular_distance(endth, gth) / traj.thetav_;
         if (dircost < 0) dircost = 0;
 
-        return thcost * (1.0 + 2.0/vth) + vcost;
+        return thcost*(1+1/vth) + vcost + wrongcost;
 
     }
 
