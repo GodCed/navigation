@@ -67,9 +67,9 @@ public:
     bool prepare() {return true;};
 
 private:
-    ros::Publisher pub_goal_dst_;
-    ros::Publisher pub_delta_goal_;
-    ros::Publisher pub_delta_ahead_;
+    ros::Publisher pub_goal_th_;
+    ros::Publisher pub_start_th_;
+    ros::Publisher pub_end_th_;
 
     Eigen::Vector3f goal_pose_;
     Eigen::Vector3f current_pose_;

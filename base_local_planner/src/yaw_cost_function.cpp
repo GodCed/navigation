@@ -42,11 +42,10 @@ namespace base_local_planner {
 
     YawCostFunction::YawCostFunction() {
 
-        ros::NodeHandle nh("yaw_cost");
-        pub_goal_dst_ = nh.advertise<std_msgs::Float64>("goal_distance", 1);
-        pub_delta_goal_ = nh.advertise<std_msgs::Float64>("delta_goal", 1);
-        pub_delta_ahead_ = nh.advertise<std_msgs::Float64>("delta_ahead", 1);
-
+        ros::NodeHandle nh("yaw_cost");   
+        pub_goal_th_ = nh.advertise<std_msgs::Float64>("goal_th", 1);
+        pub_start_th_ = nh.advertise<std_msgs::Float64>("start_th", 1);
+        pub_end_th_ = nh.advertise<std_msgs::Float64>("end_th", 1);
     }
 
 
@@ -68,6 +67,11 @@ namespace base_local_planner {
 
     double YawCostFunction::scoreTrajectoryWithLogging(Trajectory &traj, bool logging) {
 
+        // Cost is zero if trajectory is empty
+        if (traj.getPointsSize() == 0) {
+          return 0;
+        }
+
         // Goal theta
         double gth = fmod(goal_pose_[2], 2.0*M_PI);
 
@@ -76,20 +80,27 @@ namespace base_local_planner {
         traj.getEndpoint(endx, endy, endth);
 
         // Trajectory velocity
+        double vth = fabs(traj.thetav_);
         double vtrans = sqrt(traj.xv_*traj.xv_ + traj.yv_*traj.yv_);
 
         // Cost according to if the trajectory steers in the correct direction
         double thcost = fabs(angles::shortest_angular_distance(endth, gth));
 
         // Cost according to the translation velocity
-        double vcost = thcost * 10*vtrans;
+        double vcost = 10*vtrans*thcost;
 
         if( logging ) {
             
             std_msgs::Float64 msg;
 
+            msg.data = gth;
+            pub_goal_th_.publish(msg);
+
+            msg.data = fmod(current_pose_[2], 2.0*M_PI);
+            pub_start_th_.publish(msg);
+
             msg.data = endth;
-            pub_delta_goal_.publish(msg);
+            pub_end_th_.publish(msg);
 
             /*msg.data = thcost;
             pub_delta_ahead_.publish(msg);
@@ -98,7 +109,10 @@ namespace base_local_planner {
             pub_goal_dst_.publish(msg);*/
         }
 
-        return thcost + vcost;
+        double dircost = -2.0 * angles::shortest_angular_distance(endth, gth) / traj.thetav_;
+        if (dircost < 0) dircost = 0;
+
+        return thcost * (1.0 + 2.0/vth) + vcost;
 
     }
 
