@@ -104,18 +104,9 @@ namespace base_local_planner {
 
             msg.data = endth;
             pub_end_th_.publish(msg);
-
-            /*msg.data = thcost;
-            pub_delta_ahead_.publish(msg);
-
-            msg.data = gdst;
-            pub_goal_dst_.publish(msg);*/
         }
 
-        double dircost = -2.0 * angles::shortest_angular_distance(endth, gth) / traj.thetav_;
-        if (dircost < 0) dircost = 0;
-
-        return thcost*(1+1/vth) + vcost + wrongcost;
+        return thcost*(2-vth) + vcost + wrongcost;
 
     }
 

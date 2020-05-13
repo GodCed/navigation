@@ -492,7 +492,7 @@ namespace navfn {
     ROS_INFO("traj last index is %lu", len-1);
 
     double length_per_step = full_length / len;
-    unsigned long offset = static_cast<unsigned long>(0.2 / length_per_step);
+    unsigned long offset = static_cast<unsigned long>(0.5 / length_per_step);
 
     // Compute yaw at each step
     double length = 0;
@@ -624,7 +624,7 @@ namespace navfn {
     }
 
     // shift ahead yaw because local planner receive a goal ahead
-    offset = static_cast<unsigned long>(3.0 / length_per_step);
+    offset = static_cast<unsigned long>(2.5 / length_per_step);
     for(unsigned long i = len - 1; i >= offset; --i) {
       plan[i].pose.orientation = plan[i - offset].pose.orientation;
     }
