@@ -168,6 +168,7 @@ namespace navfn {
       boost::shared_ptr<NavFn> planner_;
       ros::Publisher plan_pub_;
       ros::Publisher potarr_pub_;
+      ros::Publisher cost_pub_;
       ros::Subscriber user_map_sub_;
       grid_map::GridMap user_map_;
       bool initialized_, allow_unknown_, visualize_potential_, has_user_orientation_;

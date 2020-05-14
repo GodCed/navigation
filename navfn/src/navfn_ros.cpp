@@ -39,6 +39,7 @@
 #include <pluginlib/class_list_macros.h>
 #include <costmap_2d/cost_values.h>
 #include <costmap_2d/costmap_2d.h>
+#include <std_msgs/UInt8.h>
 #include <sensor_msgs/point_cloud2_iterator.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/convert.h>
@@ -50,6 +51,9 @@
 PLUGINLIB_EXPORT_CLASS(navfn::NavfnROS, nav_core::BaseGlobalPlanner)
 
 namespace navfn {
+
+  constexpr double DIFF_STEP = 0.5;
+  constexpr double COSTMAP_LOOKAHEAD = 3.0;
 
   NavfnROS::NavfnROS() 
     : costmap_(nullptr),  planner_(), initialized_(false), allow_unknown_(true), has_user_orientation_(false) {}
@@ -81,6 +85,7 @@ namespace navfn {
       ros::NodeHandle private_nh("~/" + name);
 
       plan_pub_ = private_nh.advertise<nav_msgs::Path>("plan", 1);
+      cost_pub_ = private_nh.advertise<std_msgs::UInt8>("costmap_cost", 0);
 
       private_nh.param("visualize_potential", visualize_potential_, false);
 
@@ -463,8 +468,13 @@ namespace navfn {
 
       // Check if we are clear to turn
 
-      bool clearToTurn = costmap_->getCost(static_cast<unsigned int>(x[i]), static_cast<unsigned int>(y[i])) == costmap_2d::FREE_SPACE;
-      if (clearToTurn && i < iStart) {
+      std_msgs::UInt8 cost_msg;
+      unsigned char cost = costmap_->getCost(static_cast<unsigned int>(x[len-1-i]), static_cast<unsigned int>(y[len-1-i]));
+      cost_msg.data = cost;
+      cost_pub_.publish(cost_msg);
+
+      bool clearToTurn = cost == costmap_2d::FREE_SPACE;
+      if (clearToTurn && i < iStart && i > 0) {
         iStart = i;
       }
       if (clearToTurn && i > iApproach) {
@@ -472,27 +482,14 @@ namespace navfn {
       }
     }
 
-    /*unsigned long index_padding = static_cast<unsigned long>(1.0 / costmap_->getResolution());
-    if (iStart + index_padding < len) {
-      iStart += index_padding;
-    }
-    else {
-      iStart = len-1;
-    }
+    double length_per_step = full_length / len;
+    unsigned long offset = static_cast<unsigned long>(DIFF_STEP / length_per_step);
 
-    if (iApproach > index_padding) {
-      iApproach -= index_padding;
-    }
-    else {
-      iApproach = 0;
-    }*/
+    iStart = iStart > 1 ? iStart + offset : 1;
 
     ROS_INFO("iStart is %lu", iStart);
     ROS_INFO("iApproach is %lu", iApproach);
     ROS_INFO("traj last index is %lu", len-1);
-
-    double length_per_step = full_length / len;
-    unsigned long offset = static_cast<unsigned long>(0.5 / length_per_step);
 
     // Compute yaw at each step
     double length = 0;
@@ -624,7 +621,7 @@ namespace navfn {
     }
 
     // shift ahead yaw because local planner receive a goal ahead
-    offset = static_cast<unsigned long>(2.5 / length_per_step);
+    offset = static_cast<unsigned long>((COSTMAP_LOOKAHEAD - DIFF_STEP) / length_per_step);
     for(unsigned long i = len - 1; i >= offset; --i) {
       plan[i].pose.orientation = plan[i - offset].pose.orientation;
     }
