@@ -473,7 +473,7 @@ namespace navfn {
       cost_msg.data = cost;
       cost_pub_.publish(cost_msg);
 
-      bool clearToTurn = cost == costmap_2d::FREE_SPACE;
+      bool clearToTurn = cost <= 55;
       if (clearToTurn && i < iStart && i > 0) {
         iStart = i;
       }
