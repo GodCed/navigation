@@ -263,6 +263,7 @@ namespace dwa_local_planner {
 
     // alignment costs
     geometry_msgs::PoseStamped goal_pose = global_plan_.back();
+    geometry_msgs::PoseStamped start_pose = global_plan_.front();
 
     // compute goal pos
     Eigen::Vector3f goal_pos(
@@ -271,7 +272,14 @@ namespace dwa_local_planner {
       tf2::getYaw(goal_pose.pose.orientation)
     );
 
-    yaw_costs_.setGoalPose(goal_pos);
+    // compute start pos
+    Eigen::Vector3f start_pos(
+      start_pose.pose.position.x,
+      start_pose.pose.position.y,
+      tf2::getYaw(start_pose.pose.orientation)
+    );
+
+    yaw_costs_.setGoalPose(start_pos);
 
     // Compute robot pos
     Eigen::Vector3f pos(global_pose.pose.position.x, global_pose.pose.position.y, tf2::getYaw(global_pose.pose.orientation));
