@@ -78,16 +78,24 @@ namespace base_local_planner {
     ROS_ASSERT(global_plan.size() >= plan.size());
     std::vector<geometry_msgs::PoseStamped>::iterator it = plan.begin();
     std::vector<geometry_msgs::PoseStamped>::iterator global_it = global_plan.begin();
-    while(it != plan.end()){
-      const geometry_msgs::PoseStamped& w = *it;
+
+    const geometry_msgs::PoseStamped& w = *it;
+    double x_diff = global_pose.pose.position.x - w.pose.position.x;
+    double y_diff = global_pose.pose.position.y - w.pose.position.y;
+    double last_distance_sq = x_diff * x_diff + y_diff * y_diff;
+
+    while(it+1 != plan.end()){
+      const geometry_msgs::PoseStamped& w = *(it+1);
       // Fixed error bound of 2 meters for now. Can reduce to a portion of the map size or based on the resolution
       double x_diff = global_pose.pose.position.x - w.pose.position.x;
       double y_diff = global_pose.pose.position.y - w.pose.position.y;
-      double distance_sq = x_diff * x_diff + y_diff * y_diff;
-      if(distance_sq < 1){
+      double distance_sq = x_diff * x_diff + y_diff * y_diff; 
+
+      if(last_distance_sq < distance_sq){
         ROS_DEBUG("Nearest waypoint to <%f, %f> is <%f, %f>\n", global_pose.pose.position.x, global_pose.pose.position.y, w.pose.position.x, w.pose.position.y);
         break;
       }
+      last_distance_sq = distance_sq;
       it = plan.erase(it);
       global_it = global_plan.erase(global_it);
     }
