@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.0.2)
 project(fake_localization)
 
 find_package(catkin REQUIRED
@@ -11,6 +11,7 @@ find_package(catkin REQUIRED
             roscpp
             rospy
             tf2_geometry_msgs
+            tf2_ros
         )
 
 
