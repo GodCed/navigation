@@ -76,8 +76,16 @@ namespace base_local_planner {
 
   void prunePlan(const geometry_msgs::PoseStamped& global_pose, std::vector<geometry_msgs::PoseStamped>& plan, std::vector<geometry_msgs::PoseStamped>& global_plan){
     ROS_ASSERT(global_plan.size() >= plan.size());
+
     std::vector<geometry_msgs::PoseStamped>::iterator it = plan.begin();
+    if (it == plan.end()) {
+        return;
+    }
+
     std::vector<geometry_msgs::PoseStamped>::iterator global_it = global_plan.begin();
+    if (it == global_plan.end()) {
+        return;
+    }
 
     const geometry_msgs::PoseStamped& w = *it;
     double x_diff = global_pose.pose.position.x - w.pose.position.x;
